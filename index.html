@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>きりとりあそび</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1A237E">
+
+  <!-- iOS ホーム画面追加用 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="きりとり">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body {
+      width:100%; height:100%; overflow:hidden;
+      background:#333;
+      touch-action:none; user-select:none; -webkit-user-select:none;
+    }
+    canvas {
+      display:block; position:absolute;
+      top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      cursor:crosshair;
+    }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+
+// ============================================================
+// CANVAS
+// ============================================================
+const VW = 800, VH = 600;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = VW; canvas.height = VH;
+let scale = 1;
+
+function resize() {
+  const w = window.innerWidth  || document.documentElement.clientWidth  || VW;
+  const h = window.innerHeight || document.documentElement.clientHeight || VH;
+  scale = Math.min(w / VW, h / VH) || 1;
+  canvas.style.width  = (VW * scale) + 'px';
+  canvas.style.height = (VH * scale) + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+function toCanvas(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  return { x:(cx - r.left)/scale, y:(cy - r.top)/scale };
+}
+function easeOut(t) { return 1-(1-Math.min(t,1))*(1-Math.min(t,1)); }
+function easeIn(t)  { return Math.min(t,1)*Math.min(t,1); }
+
+// ============================================================
+// HELPERS
+// ============================================================
+function face(ctx, x, y, r, eyeColor='#2C1810') {
+  // Eyes
+  ctx.fillStyle = eyeColor;
+  ctx.beginPath(); ctx.arc(x-r*.25, y-r*.05, r*.09, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+r*.25, y-r*.05, r*.09, 0, Math.PI*2); ctx.fill();
+  // Shine
+  ctx.fillStyle = '#FFF';
+  ctx.beginPath(); ctx.arc(x-r*.21, y-r*.09, r*.04, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+r*.29, y-r*.09, r*.04, 0, Math.PI*2); ctx.fill();
+  // Smile
+  ctx.beginPath();
+  ctx.arc(x, y+r*.18, r*.24, .12*Math.PI, .88*Math.PI);
+  ctx.strokeStyle = eyeColor; ctx.lineWidth = r*.09; ctx.lineCap = 'round'; ctx.stroke();
+}
+function shine(ctx, x, y, r) {
+  ctx.beginPath(); ctx.arc(x-r*.3, y-r*.28, r*.22, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.fill();
+}
+
+// ============================================================
+// DRAW FRUITS ─ STAGE 1
+// ============================================================
+function drawApple(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body
+  ctx.beginPath(); ctx.arc(-r*.18,r*.05,r*.82,0,Math.PI*2); ctx.fillStyle='#E53935'; ctx.fill();
+  ctx.beginPath(); ctx.arc( r*.18,r*.05,r*.82,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,r*.25,r*.65,0,Math.PI); ctx.fill();
+  shine(ctx,0,0,r);
+  // Stem
+  ctx.beginPath(); ctx.moveTo(0,-r*.8);
+  ctx.quadraticCurveTo(r*.25,-r*1.2,r*.12,-r*1.38);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.11; ctx.lineCap='round'; ctx.stroke();
+  // Leaf
+  ctx.beginPath(); ctx.ellipse(r*.28,-r*1.1,r*.3,r*.14,-.6,0,Math.PI*2);
+  ctx.fillStyle='#388E3C'; ctx.fill();
+  face(ctx,0,0,r);
+  ctx.restore();
+}
+
+function drawOrange(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fillStyle='#FB8C00'; ctx.fill();
+  ctx.strokeStyle='rgba(180,100,0,.25)'; ctx.lineWidth=1.5;
+  for (let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(a)*r*.9, Math.sin(a)*r*.9); ctx.stroke();
+  }
+  shine(ctx,0,0,r);
+  ctx.beginPath(); ctx.arc(0,-r+4,5,0,Math.PI*2); ctx.fillStyle='#388E3C'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-13,-r+1,11,5,-.7,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(11,-r+3,10,5,.5,0,Math.PI*2); ctx.fill();
+  face(ctx,0,0,r);
+  ctx.restore();
+}
+
+function drawGrape(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  const gr = r*.32;
+  const pos = [[0,r*.15],[-r*.35,-r*.05],[r*.35,-r*.05],
+                [-r*.55,-r*.38],[0,-r*.38],[r*.55,-r*.38],
+                [-r*.28,-r*.72],[r*.28,-r*.72]];
+  const shades=['#7B1FA2','#8E24AA','#9C27B0','#7B1FA2','#AB47BC','#8E24AA','#9C27B0','#7B1FA2'];
+  for (let i=0;i<pos.length;i++){
+    const [gx,gy]=pos[i];
+    ctx.beginPath(); ctx.arc(gx,gy,gr,0,Math.PI*2);
+    ctx.fillStyle=shades[i]; ctx.fill();
+    ctx.beginPath(); ctx.arc(gx-gr*.3,gy-gr*.3,gr*.3,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,.4)'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.moveTo(0,-r*.72-gr);
+  ctx.quadraticCurveTo(r*.2,-r*1.05,r*.1,-r*1.2);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.1; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(r*.22,-r*1.0,r*.28,r*.13,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  // face on center grape
+  const [fx,fy]=pos[0];
+  ctx.fillStyle='#2C1810';
+  ctx.beginPath(); ctx.arc(fx-gr*.3,fy+gr*.05,gr*.25,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx+gr*.3,fy+gr*.05,gr*.25,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#FFF';
+  ctx.beginPath(); ctx.arc(fx-gr*.15,fy,gr*.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx+gr*.44,fy,gr*.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx,fy+gr*.6,gr*.5,.15*Math.PI,.85*Math.PI);
+  ctx.strokeStyle='#2C1810'; ctx.lineWidth=gr*.25; ctx.lineCap='round'; ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// DRAW FRUITS ─ STAGE 2
+// ============================================================
+function drawBanana(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body (crescent)
+  ctx.beginPath();
+  ctx.moveTo(-r*.8, r*.3);
+  ctx.quadraticCurveTo(-r*.9,-r*.6, 0,-r*.85);
+  ctx.quadraticCurveTo(r*.9,-r*.55, r*.75,r*.35);
+  ctx.quadraticCurveTo(r*.4,r*.65, 0,r*.7);
+  ctx.quadraticCurveTo(-r*.45,r*.65,-r*.8,r*.3);
+  ctx.fillStyle='#FDD835'; ctx.fill();
+  // Ridges
+  ctx.strokeStyle='rgba(180,140,0,.35)'; ctx.lineWidth=2;
+  for (let i=0;i<3;i++){
+    const t=(i+1)/4;
+    const bx = -r*.8+(r*.8+r*.75)*t, by = r*.3-(r*.3+r*.35)*t;
+    ctx.beginPath(); ctx.moveTo(bx,by);
+    ctx.quadraticCurveTo(bx+r*.05,-r*.1+i*r*.02,bx+r*.05,by-r*.5+i*r*.1); ctx.stroke();
+  }
+  // Tips (brown ends)
+  ctx.beginPath(); ctx.arc(-r*.78,r*.28,r*.09,0,Math.PI*2); ctx.fillStyle='#8D6E63'; ctx.fill();
+  ctx.beginPath(); ctx.arc(r*.73,r*.33,r*.09,0,Math.PI*2); ctx.fill();
+  shine(ctx,-r*.1,-r*.2,r*.8);
+  face(ctx,0,r*.05,r*.55);
+  ctx.restore();
+}
+
+function drawStrawberry(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(0,r);
+  ctx.quadraticCurveTo(-r*1.1,r*.2,-r*.8,-r*.3);
+  ctx.quadraticCurveTo(-r*.6,-r,0,-r*.4);
+  ctx.quadraticCurveTo(r*.6,-r,r*.8,-r*.3);
+  ctx.quadraticCurveTo(r*1.1,r*.2,0,r);
+  ctx.fillStyle='#E53935'; ctx.fill();
+  // Seeds
+  const seeds=[[-r*.25,-r*.1],[r*.25,-r*.1],[0,r*.2],[-r*.4,r*.32],[r*.4,r*.32],[0,-r*.25],[-r*.15,r*.5],[r*.15,r*.5]];
+  ctx.fillStyle='#F1C40F';
+  for(const[sx,sy]of seeds){
+    ctx.beginPath(); ctx.ellipse(sx,sy,r*.07,r*.1,.2,0,Math.PI*2); ctx.fill();
+  }
+  // Leaves
+  const la=[-r*.5,-r*.28,0,r*.28,r*.5];
+  ctx.fillStyle='#2E7D32';
+  for(const lx of la){
+    ctx.beginPath(); ctx.ellipse(lx,-r*.45+Math.abs(lx)*0.3,r*.15,r*.38,lx/r*.5,0,Math.PI*2);
+    ctx.fill();
+  }
+  shine(ctx,-r*.15,-r*.15,r*.8);
+  face(ctx,0,r*.2,r*.5);
+  ctx.restore();
+}
+
+function drawWatermelon(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Outer rind
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fillStyle='#388E3C'; ctx.fill();
+  // Stripes
+  ctx.strokeStyle='#1B5E20'; ctx.lineWidth=r*.12;
+  for(let i=0;i<4;i++){
+    const a=(i/4)*Math.PI*2+Math.PI/8;
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); ctx.stroke();
+  }
+  // Inner red (slightly smaller circle)
+  ctx.beginPath(); ctx.arc(0,0,r*.82,0,Math.PI*2); ctx.fillStyle='#EF5350'; ctx.fill();
+  // Seeds
+  ctx.fillStyle='#1A1A1A';
+  const seedP=[[r*.2,r*.1],[-r*.25,r*.2],[0,-r*.3],[r*.35,-r*.15],[-r*.35,-r*.1],[r*.15,r*.38],[-r*.2,r*.38]];
+  for(const[sx,sy]of seedP){
+    ctx.save(); ctx.translate(sx,sy); ctx.rotate(.3);
+    ctx.beginPath(); ctx.ellipse(0,0,r*.06,r*.11,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  shine(ctx,0,0,r*.82);
+  face(ctx,0,0,r*.82);
+  ctx.restore();
+}
+
+// ============================================================
+// DRAW FRUITS ─ STAGE 3
+// ============================================================
+function drawPear(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body (wide bottom, narrow top)
+  ctx.beginPath();
+  ctx.moveTo(0,-r*.9);
+  ctx.bezierCurveTo(r*.5,-r*.9,r*1.0,r*.1,r*.8,r*.6);
+  ctx.quadraticCurveTo(r*.5,r*1.1,0,r*1.05);
+  ctx.quadraticCurveTo(-r*.5,r*1.1,-r*.8,r*.6);
+  ctx.bezierCurveTo(-r*1.0,r*.1,-r*.5,-r*.9,0,-r*.9);
+  ctx.fillStyle='#8BC34A'; ctx.fill();
+  // Highlight
+  ctx.beginPath(); ctx.ellipse(-r*.2,-r*.3,r*.18,r*.35,-.4,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.35)'; ctx.fill();
+  // Stem
+  ctx.beginPath(); ctx.moveTo(0,-r*.9);
+  ctx.quadraticCurveTo(r*.15,-r*1.2,r*.08,-r*1.35);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.1; ctx.lineCap='round'; ctx.stroke();
+  // Leaf
+  ctx.beginPath(); ctx.ellipse(r*.2,-r*1.1,r*.25,r*.12,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  face(ctx,0,r*.25,r*.65);
+  ctx.restore();
+}
+
+function drawPeach(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body
+  ctx.beginPath(); ctx.arc(-r*.12,r*.08,r*.84,0,Math.PI*2); ctx.fillStyle='#FFAB91'; ctx.fill();
+  ctx.beginPath(); ctx.arc( r*.12,r*.08,r*.84,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,r*.25,r*.65,0,Math.PI); ctx.fill();
+  // Cleft line
+  ctx.beginPath(); ctx.moveTo(0,-r*.8); ctx.lineTo(0,r*.3);
+  ctx.strokeStyle='rgba(200,80,50,.3)'; ctx.lineWidth=r*.08; ctx.lineCap='round'; ctx.stroke();
+  // Blush
+  ctx.beginPath(); ctx.arc(-r*.4,r*.1,r*.3,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,100,80,.2)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(r*.4,r*.1,r*.3,0,Math.PI*2); ctx.fill();
+  shine(ctx,-r*.1,-r*.2,r*.8);
+  // Stem
+  ctx.beginPath(); ctx.moveTo(0,-r*.8);
+  ctx.quadraticCurveTo(r*.2,-r*1.1,r*.1,-r*1.28);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.1; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(r*.22,-r*.98,r*.22,r*.1,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  face(ctx,0,r*.05,r*.7);
+  ctx.restore();
+}
+
+function drawCherry(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  const cr = r*.42;
+  // Stems
+  ctx.beginPath();
+  ctx.moveTo(0,-r*.35);
+  ctx.quadraticCurveTo(-r*.25,-r*.85,-r*.45,-r*.75);
+  ctx.strokeStyle='#4CAF50'; ctx.lineWidth=r*.08; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0,-r*.35);
+  ctx.quadraticCurveTo(r*.25,-r*.85,r*.45,-r*.75);
+  ctx.stroke();
+  // Joint
+  ctx.beginPath(); ctx.arc(0,-r*.35,r*.06,0,Math.PI*2); ctx.fillStyle='#4CAF50'; ctx.fill();
+  // Leaf
+  ctx.beginPath(); ctx.ellipse(r*.15,-r*.65,r*.25,r*.12,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  // Cherries
+  for(const [cx2,cy2] of [[-r*.45,-r*.7],[r*.45,-r*.7]]){
+    ctx.beginPath(); ctx.arc(cx2,cy2,cr,0,Math.PI*2); ctx.fillStyle='#C62828'; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx2-cr*.3,cy2-cr*.3,cr*.25,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,.45)'; ctx.fill();
+    // mini face
+    ctx.fillStyle='#2C1810';
+    ctx.beginPath(); ctx.arc(cx2-cr*.2,cy2,cr*.15,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx2+cr*.2,cy2,cr*.15,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx2,cy2+cr*.3,cr*.2,.1*Math.PI,.9*Math.PI);
+    ctx.strokeStyle='#2C1810'; ctx.lineWidth=cr*.15; ctx.lineCap='round'; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// DRAW FRUITS ─ STAGE 4
+// ============================================================
+function drawPineapple(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body (oval)
+  ctx.beginPath(); ctx.ellipse(0,r*.15,r*.65,r*.88,0,0,Math.PI*2);
+  ctx.fillStyle='#FDD835'; ctx.fill();
+  // Diamond pattern
+  ctx.strokeStyle='rgba(180,120,0,.4)'; ctx.lineWidth=1.5;
+  const rows=5, cols=4;
+  for(let row=0;row<rows;row++){
+    for(let col=0;col<cols;col++){
+      const bx=(col-1.5)*r*.28, by=(row-2)*r*.3+r*.15;
+      const offset=(row%2)*r*.14;
+      ctx.beginPath();
+      ctx.moveTo(bx+offset,by-r*.14); ctx.lineTo(bx+offset+r*.14,by);
+      ctx.lineTo(bx+offset,by+r*.14); ctx.lineTo(bx+offset-r*.14,by);
+      ctx.closePath(); ctx.stroke();
+    }
+  }
+  shine(ctx,-r*.2,-r*.2,r*.65);
+  // Crown leaves
+  const leafData=[[-r*.3,-r*.88,-.5],[0,-r*1.0,0],[r*.3,-r*.88,.5],[-.5*r,-r*.7,-.7],[.5*r,-r*.7,.7]];
+  ctx.fillStyle='#2E7D32';
+  for(const[lx,ly,la] of leafData){
+    ctx.save(); ctx.translate(lx,ly); ctx.rotate(la);
+    ctx.beginPath(); ctx.ellipse(0,-r*.3,r*.1,r*.38,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  face(ctx,0,r*.2,r*.5);
+  ctx.restore();
+}
+
+function drawLemon(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body (oval with pointed ends)
+  ctx.beginPath();
+  ctx.moveTo(-r,0);
+  ctx.bezierCurveTo(-r,-r*.6,r*.4,-r*.95,r*.6,-r*.15);
+  ctx.bezierCurveTo(r*.9,r*.3,r*.7,r*.8,r*.1,r*.95);
+  ctx.bezierCurveTo(-r*.3,r*1.05,-r*.7,r*.8,-r*.85,r*.4);
+  ctx.bezierCurveTo(-r*1.0,r*.1,-r,0,-r,0);
+  ctx.fillStyle='#FFF176'; ctx.fill();
+  // Texture dots
+  ctx.fillStyle='rgba(200,180,0,.25)';
+  for(let i=0;i<12;i++){
+    const a=(i/12)*Math.PI*2, d=r*.5;
+    ctx.beginPath(); ctx.arc(Math.cos(a)*d,Math.sin(a)*d,r*.04,0,Math.PI*2); ctx.fill();
+  }
+  shine(ctx,-r*.25,-r*.25,r*.85);
+  // Tip bumps
+  ctx.beginPath(); ctx.arc(-r*.95,r*.05,r*.1,0,Math.PI*2); ctx.fillStyle='#FBC02D'; ctx.fill();
+  ctx.beginPath(); ctx.arc(r*.65,-r*.1,r*.08,0,Math.PI*2); ctx.fill();
+  face(ctx,-r*.05,r*.1,r*.55);
+  ctx.restore();
+}
+
+function drawMelon(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fillStyle='#66BB6A'; ctx.fill();
+  // Net pattern
+  ctx.strokeStyle='rgba(30,100,30,.35)'; ctx.lineWidth=1.5;
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); ctx.stroke();
+  }
+  for(let ri=1;ri<=3;ri++){
+    ctx.beginPath(); ctx.arc(0,0,r*ri/3.2,0,Math.PI*2); ctx.stroke();
+  }
+  // Yellow belly patch
+  ctx.beginPath(); ctx.ellipse(r*.25,r*.35,r*.35,r*.22,-.5,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,235,100,.5)'; ctx.fill();
+  shine(ctx,-r*.2,-r*.25,r);
+  // Stem
+  ctx.beginPath(); ctx.arc(0,-r+3,5,0,Math.PI*2); ctx.fillStyle='#558B2F'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-12,-r+2,10,5,-.6,0,Math.PI*2); ctx.fill();
+  face(ctx,0,0,r);
+  ctx.restore();
+}
+
+// ============================================================
+// DRAW FRUITS ─ STAGE 5
+// ============================================================
+function drawMango(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Body (teardrop, wider at bottom)
+  ctx.beginPath();
+  ctx.moveTo(0,-r);
+  ctx.bezierCurveTo(r*.7,-r*.8,r*.95,r*.1,r*.7,r*.65);
+  ctx.quadraticCurveTo(r*.3,r*1.05,0,r);
+  ctx.quadraticCurveTo(-r*.3,r*1.05,-r*.7,r*.65);
+  ctx.bezierCurveTo(-r*.95,r*.1,-r*.7,-r*.8,0,-r);
+  ctx.fillStyle='#FFB300'; ctx.fill();
+  // Red blush
+  ctx.beginPath(); ctx.ellipse(r*.4,r*.05,r*.35,r*.5,.3,0,Math.PI*2);
+  ctx.fillStyle='rgba(229,57,53,.35)'; ctx.fill();
+  shine(ctx,-r*.2,-r*.25,r*.85);
+  // Stem
+  ctx.beginPath(); ctx.moveTo(0,-r);
+  ctx.quadraticCurveTo(r*.2,-r*1.25,r*.08,-r*1.4);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.1; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(r*.2,-r*1.1,r*.25,r*.12,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  face(ctx,0,r*.2,r*.6);
+  ctx.restore();
+}
+
+function drawBlueberry(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  const br = r*.28;
+  const pos=[[0,r*.18],[-r*.38,-r*.02],[r*.38,-r*.02],
+             [-r*.6,-r*.38],[0,-r*.38],[r*.6,-r*.38],
+             [-r*.28,-r*.72],[r*.28,-r*.72]];
+  for(let i=0;i<pos.length;i++){
+    const[bx,by]=pos[i];
+    ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2);
+    ctx.fillStyle=i%2===0?'#3949AB':'#5C6BC0'; ctx.fill();
+    // Crown on each berry
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1;
+    for(let j=0;j<5;j++){
+      const a=(j/5)*Math.PI*2-Math.PI/2;
+      ctx.beginPath(); ctx.moveTo(bx,by-br*.6);
+      ctx.lineTo(bx+Math.cos(a)*br*.55,by+Math.sin(a)*br*.55); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(bx-br*.3,by-br*.3,br*.28,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,.35)'; ctx.fill();
+  }
+  // Stem
+  const[tx,ty]=pos[7];
+  ctx.beginPath(); ctx.moveTo(tx,ty-br);
+  ctx.quadraticCurveTo(r*.1,-r*1.05,r*.05,-r*1.2);
+  ctx.strokeStyle='#6D4C41'; ctx.lineWidth=r*.08; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(r*.2,-r*.98,r*.22,r*.1,-.5,0,Math.PI*2);
+  ctx.fillStyle='#2E7D32'; ctx.fill();
+  // face on center
+  const[fx,fy]=pos[0];
+  ctx.fillStyle='#1A237E';
+  ctx.beginPath(); ctx.arc(fx-br*.28,fy+br*.05,br*.22,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx+br*.28,fy+br*.05,br*.22,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#FFF';
+  ctx.beginPath(); ctx.arc(fx-br*.12,fy,br*.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx+br*.42,fy,br*.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(fx,fy+br*.65,br*.45,.15*Math.PI,.85*Math.PI);
+  ctx.strokeStyle='#1A237E'; ctx.lineWidth=br*.22; ctx.lineCap='round'; ctx.stroke();
+  ctx.restore();
+}
+
+function drawKiwi(ctx, x, y, r) {
+  ctx.save(); ctx.translate(x,y);
+  // Cross-section view
+  // Outer skin
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fillStyle='#5D4037'; ctx.fill();
+  // Rind ring
+  ctx.beginPath(); ctx.arc(0,0,r*.88,0,Math.PI*2); ctx.fillStyle='#33691E'; ctx.fill();
+  // Flesh
+  ctx.beginPath(); ctx.arc(0,0,r*.78,0,Math.PI*2); ctx.fillStyle='#8BC34A'; ctx.fill();
+  // Center
+  ctx.beginPath(); ctx.arc(0,0,r*.25,0,Math.PI*2); ctx.fillStyle='#F9FBE7'; ctx.fill();
+  // Seeds (radiating)
+  ctx.fillStyle='#1A1A1A';
+  for(let i=0;i<10;i++){
+    const a=(i/10)*Math.PI*2;
+    const sx=Math.cos(a)*r*.5, sy=Math.sin(a)*r*.5;
+    ctx.save(); ctx.translate(sx,sy); ctx.rotate(a+Math.PI/2);
+    ctx.beginPath(); ctx.ellipse(0,0,r*.04,r*.1,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  // White lines from center
+  ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.5;
+  for(let i=0;i<10;i++){
+    const a=(i/10)*Math.PI*2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*r*.26,Math.sin(a)*r*.26);
+    ctx.lineTo(Math.cos(a)*r*.65,Math.sin(a)*r*.65); ctx.stroke();
+  }
+  // Shine
+  ctx.beginPath(); ctx.arc(-r*.2,-r*.2,r*.18,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,.3)'; ctx.fill();
+  // Face (on skin ring)
+  ctx.fillStyle='#2C1810';
+  ctx.beginPath(); ctx.arc(-r*.25,0,r*.07,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( r*.25,0,r*.07,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#FFF';
+  ctx.beginPath(); ctx.arc(-r*.21,-r*.04,r*.03,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( r*.29,-r*.04,r*.03,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,r*.18,r*.18,.12*Math.PI,.88*Math.PI);
+  ctx.strokeStyle='#2C1810'; ctx.lineWidth=r*.07; ctx.lineCap='round'; ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// STAGE DEFINITIONS
+// ============================================================
+const ITEM_POSITIONS = [
+  {x:180, y:265}, {x:480, y:248}, {x:330, y:428}
+];
+const SHADOW_POSITIONS = [
+  {x:278, y:305}, {x:490, y:260}, {x:388, y:408}
+];
+const TRAY_Y = 555;
+const TRAY_SLOTS = [160, 400, 640];
+
+const STAGES = [
+  {
+    label:'ステージ 1',
+    sky1:'#87CEEB', sky2:'#B8E4F7', gnd1:'#8BC34A', gnd2:'#558B2F',
+    plateColor:'#FAFAFA', plateBorder:'#E0E0E0',
+    items:[
+      { id:'apple',      name:'りんご',    fn:drawApple,      color:'#EF9A9A', drawR:72, guideR:122 },
+      { id:'orange',     name:'オレンジ',  fn:drawOrange,     color:'#FFCC80', drawR:70, guideR:120 },
+      { id:'grape',      name:'ぶどう',    fn:drawGrape,      color:'#CE93D8', drawR:68, guideR:118 },
+    ]
+  },
+  {
+    label:'ステージ 2',
+    sky1:'#FFF8E1', sky2:'#FFF9C4', gnd1:'#A5D6A7', gnd2:'#388E3C',
+    plateColor:'#FFFDE7', plateBorder:'#FDD835',
+    items:[
+      { id:'banana',     name:'バナナ',    fn:drawBanana,     color:'#FFF176', drawR:70, guideR:120 },
+      { id:'strawberry', name:'いちご',    fn:drawStrawberry, color:'#EF9A9A', drawR:70, guideR:120 },
+      { id:'watermelon', name:'すいか',    fn:drawWatermelon, color:'#A5D6A7', drawR:70, guideR:120 },
+    ]
+  },
+  {
+    label:'ステージ 3',
+    sky1:'#FCE4EC', sky2:'#F8BBD0', gnd1:'#CE93D8', gnd2:'#8E24AA',
+    plateColor:'#FFF0F5', plateBorder:'#F48FB1',
+    items:[
+      { id:'pear',   name:'なし',    fn:drawPear,   color:'#DCEDC8', drawR:70, guideR:120 },
+      { id:'peach',  name:'もも',    fn:drawPeach,  color:'#FFCCBC', drawR:70, guideR:120 },
+      { id:'cherry', name:'さくらんぼ', fn:drawCherry, color:'#FFCDD2', drawR:68, guideR:118 },
+    ]
+  },
+  {
+    label:'ステージ 4',
+    sky1:'#E8F5E9', sky2:'#C8E6C9', gnd1:'#4CAF50', gnd2:'#2E7D32',
+    plateColor:'#E8F5E9', plateBorder:'#81C784',
+    items:[
+      { id:'pineapple', name:'パイナップル', fn:drawPineapple, color:'#FFF9C4', drawR:68, guideR:118 },
+      { id:'lemon',     name:'レモン',       fn:drawLemon,     color:'#FFF9C4', drawR:68, guideR:118 },
+      { id:'melon',     name:'メロン',       fn:drawMelon,     color:'#C8E6C9', drawR:70, guideR:120 },
+    ]
+  },
+  {
+    label:'ステージ 5',
+    sky1:'#E8EAF6', sky2:'#C5CAE9', gnd1:'#7986CB', gnd2:'#3949AB',
+    plateColor:'#F3E5F5', plateBorder:'#CE93D8',
+    items:[
+      { id:'mango',      name:'マンゴー',      fn:drawMango,      color:'#FFE082', drawR:70, guideR:120 },
+      { id:'blueberry',  name:'ブルーベリー',  fn:drawBlueberry,  color:'#9FA8DA', drawR:68, guideR:118 },
+      { id:'kiwi',       name:'キウイ',        fn:drawKiwi,       color:'#C5E1A5', drawR:68, guideR:118 },
+    ]
+  },
+];
+
+// ============================================================
+// PARTICLES
+// ============================================================
+const particles = [];
+function spawnParticles(x, y, color, count=18) {
+  for(let i=0;i<count;i++){
+    const a=Math.random()*Math.PI*2, sp=3+Math.random()*5;
+    particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-2,
+                     r:5+Math.random()*6, color, life:1.0 });
+  }
+}
+function updateParticles(){ for(let i=particles.length-1;i>=0;i--){
+  const p=particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=.18; p.life-=.025;
+  if(p.life<=0) particles.splice(i,1);
+}}
+function drawParticles(ctx){ for(const p of particles){
+  ctx.save(); ctx.globalAlpha=p.life;
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+  ctx.fillStyle=p.color; ctx.fill(); ctx.restore();
+}}
+
+// ============================================================
+// CUT ITEM
+// ============================================================
+class CutItem {
+  constructor(cfg, pos, traySlot, stageIdx) {
+    Object.assign(this, cfg);
+    this.drawFn = cfg.fn;
+    this.x = pos.x; this.y = pos.y;
+    this.trayX = TRAY_SLOTS[traySlot]; this.trayY = TRAY_Y;
+    this.SEG = 40;
+    this.covered = new Array(this.SEG).fill(false);
+    this.phase = 'idle'; // idle | tracing | popping | done
+    this.px=this.x; this.py=this.y; this.pscale=1; this.palpha=1; this.popTimer=0;
+  }
+  get pct(){ return this.covered.filter(Boolean).length/this.SEG; }
+  segPt(i){ const a=(i/this.SEG)*Math.PI*2-Math.PI; return[this.x+Math.cos(a)*this.guideR, this.y+Math.sin(a)*this.guideR]; }
+  onMove(tx,ty){
+    if(this.phase!=='idle'&&this.phase!=='tracing') return;
+    const dx=tx-this.x, dy=ty-this.y, dist=Math.sqrt(dx*dx+dy*dy);
+    if(Math.abs(dist-this.guideR)>62) return;
+    const a=Math.atan2(dy,dx);
+    const n=((a+Math.PI)/(Math.PI*2)*this.SEG)|0;
+    for(let d=-2;d<=2;d++) this.covered[(n+d+this.SEG)%this.SEG]=true;
+    this.phase='tracing';
+    if(this.pct>=.55) this.startPop();
+  }
+  startPop(){ this.phase='popping'; this.popTimer=0; spawnParticles(this.x,this.y,this.color); }
+  update(){
+    if(this.phase!=='popping') return;
+    this.popTimer+=.04;
+    const t=this.popTimer;
+    if(t<.3){ this.pscale=1+t*.8; this.px=this.x; this.py=this.y; }
+    else {
+      const p=(t-.3)/.7;
+      this.px=this.x+(this.trayX-this.x)*easeOut(p);
+      this.py=this.y+(this.trayY-this.y)*easeOut(p);
+      this.pscale=1+(1-p)*.3;
+      this.palpha=p>.8?1-(p-.8)/.2*.5:1;
+      if(p>=1){ this.phase='done'; this.palpha=1; }
+    }
+  }
+  draw(ctx){
+    if(this.phase==='done') return;
+    const[rx,ry,rs,ra]=this.phase==='popping'?[this.px,this.py,this.pscale,this.palpha]:[this.x,this.y,1,1];
+    ctx.save(); ctx.translate(rx,ry); ctx.scale(rs,rs); ctx.globalAlpha=ra;
+    this.drawFn(ctx,0,0,this.drawR); ctx.restore();
+    if(this.phase!=='popping') this.drawGuide(ctx);
+  }
+  drawGuide(ctx){
+    const pct=this.pct;
+    for(let i=0;i<this.SEG;i++){
+      const[x1,y1]=this.segPt(i), [x2,y2]=this.segPt((i+1)%this.SEG);
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      if(this.covered[i]){
+        ctx.strokeStyle=this.color; ctx.lineWidth=7;
+        ctx.shadowColor=this.color; ctx.shadowBlur=14;
+      } else {
+        ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.lineWidth=3;
+        ctx.setLineDash([6,7]); ctx.shadowBlur=0;
+      }
+      ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur=0;
+    }
+    if(pct>0){
+      ctx.save();
+      ctx.beginPath(); ctx.arc(this.x,this.y+this.guideR+22,17,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,0,0,.38)'; ctx.fill();
+      ctx.font='bold 15px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=pct>=.55?'#76FF03':'#FFD740';
+      ctx.fillText(Math.round(pct*100)+'%',this.x,this.y+this.guideR+22);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.font='bold 17px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.textAlign='center'; ctx.fillStyle='#FFF';
+    ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=5;
+    ctx.fillText(this.phase==='idle'?'✏️ なぞってね':this.name, this.x, this.y-this.guideR-14);
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// ASSEMBLY PIECE
+// ============================================================
+class AssemPiece {
+  constructor(cfg, traySlot, shadow) {
+    Object.assign(this, cfg);
+    this.drawFn = cfg.fn;
+    this.x=TRAY_SLOTS[traySlot]; this.y=TRAY_Y;
+    this.shadowX=shadow.x; this.shadowY=shadow.y;
+    this.placed=false; this.dragging=false; this.dx=0; this.dy=0; this.wobble=0;
+  }
+  hit(px,py){ return Math.hypot(px-this.x,py-this.y)<this.drawR+22; }
+  update(){
+    if(this.placed){ this.x+=(this.shadowX-this.x)*.2; this.y+=(this.shadowY-this.y)*.2; }
+    if(this.wobble>0) this.wobble-=.06;
+  }
+  draw(ctx){
+    if(this.dragging) return;
+    const sc=this.placed?1+Math.sin(this.wobble*8)*.05*this.wobble:1;
+    ctx.save(); ctx.translate(this.x,this.y); ctx.scale(sc,sc);
+    if(!this.placed){
+      ctx.scale(.46,.46); this.drawFn(ctx,0,0,this.drawR);
+    } else {
+      this.drawFn(ctx,0,0,this.drawR);
+      ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle='rgba(0,180,0,.9)'; ctx.fillText('✓',0,this.drawR+20);
+    }
+    ctx.restore();
+  }
+  drawDrag(ctx,mx,my){
+    ctx.save(); ctx.translate(mx+this.dx,my+this.dy); ctx.scale(1.12,1.12);
+    ctx.shadowColor='rgba(0,0,0,.4)'; ctx.shadowBlur=20; ctx.shadowOffsetY=8;
+    this.drawFn(ctx,0,0,this.drawR); ctx.restore();
+  }
+}
+
+// ============================================================
+// BACKGROUND DRAWING
+// ============================================================
+function drawCuttingBG(ctx, stg) {
+  const s=STAGES[stg];
+  const sky=ctx.createLinearGradient(0,0,0,VH);
+  sky.addColorStop(0,s.sky1); sky.addColorStop(.52,s.sky2);
+  sky.addColorStop(.52,s.gnd1); sky.addColorStop(1,s.gnd2);
+  ctx.fillStyle=sky; ctx.fillRect(0,0,VW,VH);
+  // Clouds
+  ctx.fillStyle='rgba(255,255,255,.8)';
+  for(const[cx,cy,cr] of [[110,68,33],[133,57,26],[95,62,23],[550,76,38],[572,64,30],[528,71,25]]){
+    ctx.beginPath(); ctx.arc(cx,cy,cr,0,Math.PI*2); ctx.fill();
+  }
+  // Stage label
+  ctx.save();
+  ctx.font='bold 22px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,.9)';
+  ctx.shadowColor='rgba(0,0,0,.4)'; ctx.shadowBlur=5;
+  ctx.fillText('✂ なぞってきりとろう！', VW/2, 42);
+  ctx.restore();
+}
+
+function drawAssemblyBG(ctx, stg) {
+  const s=STAGES[stg];
+  const bg=ctx.createLinearGradient(0,0,0,VH);
+  bg.addColorStop(0,'#FFF8E1'); bg.addColorStop(1,'#FFE082');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,VW,VH);
+  // Table
+  ctx.fillStyle='#A1887F'; ctx.fillRect(0,VH*.75,VW,VH*.25);
+  ctx.fillStyle='#8D6E63'; ctx.fillRect(0,VH*.75,VW,8);
+  // Plate
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.2)'; ctx.shadowBlur=22; ctx.shadowOffsetY=8;
+  ctx.beginPath(); ctx.ellipse(VW/2,VH*.47,268,172,0,0,Math.PI*2);
+  ctx.fillStyle=s.plateColor; ctx.fill(); ctx.restore();
+  ctx.beginPath(); ctx.ellipse(VW/2,VH*.47,268,172,0,0,Math.PI*2);
+  ctx.strokeStyle=s.plateBorder; ctx.lineWidth=10; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(VW/2,VH*.47,246,158,0,0,Math.PI*2);
+  ctx.strokeStyle='rgba(200,200,200,.5)'; ctx.lineWidth=2; ctx.stroke();
+  // Label
+  ctx.save();
+  ctx.font='bold 32px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.fillStyle='#795548';
+  ctx.shadowColor='rgba(0,0,0,.1)'; ctx.shadowBlur=4;
+  ctx.fillText('おさらに おいてね 🍽', VW/2, 48); ctx.restore();
+}
+
+function drawTray(ctx, items2, pieces2, scene2) {
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.3)'; ctx.shadowBlur=10; ctx.shadowOffsetY=4;
+  ctx.beginPath(); ctx.roundRect(58,VH-82,VW-116,76,16);
+  ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fill(); ctx.restore();
+  for(const sx of TRAY_SLOTS){
+    ctx.beginPath(); ctx.arc(sx,TRAY_Y,38,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=2; ctx.stroke();
+  }
+  if(scene2==='cutting'){
+    for(const it of items2){ if(it.phase==='done'){
+      ctx.save(); ctx.translate(it.trayX,TRAY_Y); ctx.scale(.45,.45);
+      it.drawFn(ctx,0,0,it.drawR); ctx.restore();
+    }}
+  }
+}
+
+function drawShadows(ctx, stg) {
+  const fns=STAGES[stg].items.map(c=>c.fn);
+  const rs=[65,62,60];
+  for(let i=0;i<3;i++){
+    const{x,y}=SHADOW_POSITIONS[i];
+    ctx.save(); ctx.globalAlpha=.14; ctx.globalCompositeOperation='multiply';
+    fns[i](ctx,x,y,rs[i]); ctx.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x,y,rs[i]+14,0,Math.PI*2);
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=3;
+    ctx.setLineDash([8,8]); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  }
+}
+
+function drawStageIndicator(ctx, stageIdx) {
+  const total=5, dotR=9, gap=28, startX=VW/2-((total-1)*gap)/2;
+  for(let i=0;i<total;i++){
+    const sx=startX+i*gap;
+    ctx.beginPath(); ctx.arc(sx,VH-8,dotR,0,Math.PI*2);
+    ctx.fillStyle=i===stageIdx?'#FFD600':i<stageIdx?'rgba(255,255,255,.7)':'rgba(255,255,255,.25)';
+    ctx.fill();
+    if(i===stageIdx){
+      ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.stroke();
+    }
+  }
+}
+
+// ============================================================
+// TITLE SCREEN
+// ============================================================
+function drawTitle(ctx) {
+  const g=ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#1A237E'); g.addColorStop(1,'#283593');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  // Stars
+  for(let i=0;i<45;i++){
+    const sx=(i*137.5+50)%VW, sy=(i*97.3+30)%(VH*.7);
+    const sr=1+Math.sin(Date.now()/800+i)*.5;
+    ctx.beginPath(); ctx.arc(sx,sy,sr,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${.25+Math.sin(Date.now()/600+i)*.3})`; ctx.fill();
+  }
+  // Preview fruits (all 5 stages)
+  const previewFns=[drawApple,drawOrange,drawGrape,drawBanana,drawStrawberry,drawWatermelon,drawPear,drawPeach,drawCherry,drawPineapple,drawLemon,drawMelon,drawMango,drawBlueberry,drawKiwi];
+  const rows=[[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14]];
+  for(let row=0;row<3;row++){
+    for(let col=0;col<5;col++){
+      const fi=rows[row][col];
+      if(fi>=previewFns.length) continue;
+      const fx=80+col*160, fy=140+row*130;
+      const sc=.8+Math.sin(Date.now()/700+fi)*.04;
+      ctx.save(); ctx.translate(fx,fy); ctx.scale(sc,sc);
+      ctx.globalAlpha=.22; previewFns[fi](ctx,0,0,48); ctx.restore();
+    }
+  }
+  // Title
+  ctx.save();
+  ctx.font='bold 56px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.fillStyle='#FFF';
+  ctx.shadowColor='rgba(0,100,255,.8)'; ctx.shadowBlur=22;
+  ctx.fillText('✂ きりとりあそび',VW/2,95); ctx.restore();
+  // Sub
+  ctx.save();
+  ctx.font='bold 24px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,200,.9)';
+  ctx.shadowBlur=0;
+  ctx.fillText('くだものを なぞって きりとろう！ 5ステージ',VW/2,148); ctx.restore();
+  // Tap button
+  const p=.96+Math.sin(Date.now()/400)*.04;
+  ctx.save(); ctx.translate(VW/2,VH-85); ctx.scale(p,p);
+  ctx.shadowColor='rgba(255,220,0,.7)'; ctx.shadowBlur=20;
+  ctx.beginPath(); ctx.roundRect(-145,-32,290,64,32);
+  ctx.fillStyle='#FFD600'; ctx.fill();
+  ctx.font='bold 28px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#4A0000'; ctx.shadowBlur=0;
+  ctx.fillText('👆 タッチしてはじめる',0,2); ctx.restore();
+}
+
+// ============================================================
+// STAGE CLEAR OVERLAY
+// ============================================================
+function drawStageClearOverlay(ctx, stageIdx, progress) {
+  // progress 0→1
+  const alpha = progress < .3 ? progress/.3 : progress > .8 ? (1-progress)/.2 : 1;
+  ctx.save(); ctx.globalAlpha = Math.min(alpha,.95);
+  ctx.fillStyle = '#FFF'; ctx.fillRect(0,0,VW,VH);
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 72px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = '#FF6F00';
+  ctx.shadowColor='rgba(255,150,0,.5)'; ctx.shadowBlur=20;
+  ctx.fillText('🎉 クリア！', VW/2, VH/2-30);
+  ctx.font = 'bold 32px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillStyle = '#795548'; ctx.shadowBlur=0;
+  ctx.fillText(`ステージ ${stageIdx+1} おわり！`, VW/2, VH/2+50);
+  ctx.restore();
+}
+
+// ============================================================
+// GRAND COMPLETE
+// ============================================================
+let celebStars = [];
+function initCelebStars() {
+  celebStars = Array.from({length:40}, () => ({
+    x:Math.random()*VW, y:-20,
+    vy:2+Math.random()*3, vx:(Math.random()-.5)*2,
+    r:8+Math.random()*14,
+    color:['#FF6B6B','#FFD93D','#6BCB77','#4D96FF','#C77DFF'][Math.floor(Math.random()*5)],
+    rot:Math.random()*Math.PI*2, vrot:(Math.random()-.5)*.2,
+  }));
+}
+
+function drawGrandComplete(ctx) {
+  const g=ctx.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,'#FFF3E0'); g.addColorStop(1,'#FFEB3B');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VW,VH);
+  for(const s of celebStars){
+    ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.rot);
+    ctx.fillStyle=s.color; ctx.fillRect(-s.r/2,-s.r/2,s.r,s.r*.6); ctx.restore();
+  }
+  // Show all 15 fruits
+  const allFns=[drawApple,drawOrange,drawGrape,drawBanana,drawStrawberry,drawWatermelon,drawPear,drawPeach,drawCherry,drawPineapple,drawLemon,drawMelon,drawMango,drawBlueberry,drawKiwi];
+  const row1=[0,1,2,3,4], row2=[5,6,7,8,9], row3=[10,11,12,13,14];
+  [[row1,300],[row2,390],[row3,480]].forEach(([row,ry]) => {
+    row.forEach((fi,col) => {
+      const sc=1+Math.sin(Date.now()/600+fi)*.04;
+      ctx.save(); ctx.translate(80+col*160,ry); ctx.scale(sc,sc);
+      allFns[fi](ctx,0,0,42); ctx.restore();
+    });
+  });
+  // Message
+  ctx.save();
+  ctx.font='bold 60px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.fillStyle='#E91E63';
+  ctx.shadowColor='rgba(255,255,255,.8)'; ctx.shadowBlur=10;
+  ctx.fillText('🏆 ぜんぶ クリア！！',VW/2,115);
+  ctx.font='bold 28px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.fillStyle='#FF6F00'; ctx.shadowBlur=0;
+  ctx.fillText('15こ ぜんぶ きりとれたね！すごい！',VW/2,165); ctx.restore();
+  // Replay
+  const p=.97+Math.sin(Date.now()/400)*.03;
+  ctx.save(); ctx.translate(VW/2,VH-55); ctx.scale(p,p);
+  ctx.shadowColor='rgba(0,0,0,.3)'; ctx.shadowBlur=15;
+  ctx.beginPath(); ctx.roundRect(-155,-30,310,60,30);
+  ctx.fillStyle='#E91E63'; ctx.fill();
+  ctx.font='bold 26px "Hiragino Maru Gothic ProN",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='#FFF'; ctx.shadowBlur=0;
+  ctx.fillText('🔄 もういちど あそぶ',0,2); ctx.restore();
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+let scene='title'; // title | cutting | assembly | stage-clear | grand-complete
+let stageIdx=0;
+let items=[], pieces=[];
+let draggingPiece=null, mouseX=0, mouseY=0;
+let stageClearTimer=0;
+let grandCompleteTimer=0;
+
+function makeItems(si){
+  return STAGES[si].items.map((cfg,i) =>
+    new CutItem(cfg, ITEM_POSITIONS[i], i, si)
+  );
+}
+function makePieces(si){
+  return STAGES[si].items.map((cfg,i) =>
+    new AssemPiece(cfg, i, SHADOW_POSITIONS[i])
+  );
+}
+
+function initTitle()   { scene='title'; }
+function initCutting(si){ scene='cutting'; stageIdx=si; items=makeItems(si); }
+function initAssembly(si){ scene='assembly'; stageIdx=si; pieces=makePieces(si); }
+function initStageClear(si){ scene='stage-clear'; stageIdx=si; stageClearTimer=0; }
+function initGrandComplete(){ scene='grand-complete'; grandCompleteTimer=0; initCelebStars(); }
+
+// ============================================================
+// INPUT
+// ============================================================
+let isDown=false;
+
+function onDown(cx,cy){
+  isDown=true;
+  if(scene==='title'){ initCutting(0); return; }
+  if(scene==='grand-complete'){ initTitle(); return; }
+  if(scene==='assembly'){
+    const pick=[...pieces].reverse().find(p=>!p.placed&&p.hit(cx,cy));
+    if(pick){ draggingPiece=pick; pick.dragging=true; pick.dx=pick.x-cx; pick.dy=pick.y-cy; }
+  }
+}
+function onMove(cx,cy){
+  mouseX=cx; mouseY=cy;
+  if(!isDown) return;
+  if(scene==='cutting') for(const it of items) it.onMove(cx,cy);
+}
+function onUp(cx,cy){
+  isDown=false;
+  if(scene==='assembly'&&draggingPiece){
+    const p=draggingPiece;
+    const fx=cx+p.dx, fy=cy+p.dy;
+    if(!p.placed&&Math.hypot(fx-p.shadowX,fy-p.shadowY)<85){
+      p.placed=true; p.wobble=1;
+      spawnParticles(p.shadowX,p.shadowY,p.color);
+    } else { p.x=fx; p.y=fy; }
+    p.dragging=false; draggingPiece=null;
+    if(pieces.every(p=>p.placed)) setTimeout(()=>initStageClear(stageIdx),500);
+  }
+}
+
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();const{x,y}=toCanvas(e.clientX,e.clientY);onDown(x,y);});
+canvas.addEventListener('pointermove',e=>{e.preventDefault();const{x,y}=toCanvas(e.clientX,e.clientY);onMove(x,y);});
+canvas.addEventListener('pointerup',  e=>{e.preventDefault();const{x,y}=toCanvas(e.clientX,e.clientY);onUp(x,y);});
+canvas.addEventListener('pointercancel',()=>{isDown=false;draggingPiece=null;});
+
+// ============================================================
+// UPDATE
+// ============================================================
+function update(){
+  updateParticles();
+  if(scene==='cutting'){
+    for(const it of items) it.update();
+    if(items.length&&items.every(it=>it.phase==='done'))
+      setTimeout(()=>initAssembly(stageIdx),400);
+  }
+  if(scene==='assembly') for(const p of pieces) p.update();
+  if(scene==='stage-clear'){
+    stageClearTimer+=1/60;
+    if(stageClearTimer>=2.0){
+      if(stageIdx>=4) initGrandComplete();
+      else initCutting(stageIdx+1);
+    }
+  }
+  if(scene==='grand-complete'){
+    grandCompleteTimer++;
+    for(const s of celebStars){
+      s.x+=s.vx; s.y+=s.vy; s.rot+=s.vrot;
+      if(s.y>VH+20){ s.y=-20; s.x=Math.random()*VW; }
+    }
+  }
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render(){
+  ctx.clearRect(0,0,VW,VH);
+
+  if(scene==='title'){ drawTitle(ctx); return; }
+  if(scene==='grand-complete'){ drawGrandComplete(ctx); drawParticles(ctx); return; }
+
+  if(scene==='cutting'){
+    drawCuttingBG(ctx,stageIdx);
+    drawTray(ctx,items,[],scene);
+    for(const it of items) it.draw(ctx);
+    // Stage label top-right
+    ctx.save();
+    ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.textAlign='right'; ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.shadowColor='rgba(0,0,0,.4)'; ctx.shadowBlur=4;
+    ctx.fillText(STAGES[stageIdx].label,VW-16,26); ctx.restore();
+    drawStageIndicator(ctx,stageIdx);
+  }
+
+  if(scene==='assembly'){
+    drawAssemblyBG(ctx,stageIdx);
+    drawShadows(ctx,stageIdx);
+    for(const p of pieces) if(!p.dragging) p.draw(ctx);
+    drawTray(ctx,[],pieces,scene);
+    if(draggingPiece) draggingPiece.drawDrag(ctx,mouseX,mouseY);
+    if(!pieces.every(p=>p.placed)){
+      ctx.save();
+      ctx.font='21px "Hiragino Maru Gothic ProN",sans-serif';
+      ctx.textAlign='center'; ctx.fillStyle='rgba(100,60,20,.8)';
+      ctx.fillText('したの くだものを かげの ところに おこう！',VW/2,VH-95);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.font='bold 20px "Hiragino Maru Gothic ProN",sans-serif';
+    ctx.textAlign='right'; ctx.fillStyle='rgba(100,60,20,.8)';
+    ctx.shadowColor='rgba(0,0,0,.1)'; ctx.shadowBlur=4;
+    ctx.fillText(STAGES[stageIdx].label,VW-16,26); ctx.restore();
+    drawStageIndicator(ctx,stageIdx);
+  }
+
+  if(scene==='stage-clear'){
+    // Draw assembly behind
+    drawAssemblyBG(ctx,stageIdx);
+    drawStageClearOverlay(ctx,stageIdx,stageClearTimer/2.0);
+  }
+
+  drawParticles(ctx);
+}
+
+// ============================================================
+// LOOP
+// ============================================================
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+
+initTitle();
+loop();
+
+// Service Worker 登録（PWA オフライン対応）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
