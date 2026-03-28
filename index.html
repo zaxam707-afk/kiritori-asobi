@@ -514,7 +514,7 @@ function drawKiwi(ctx, x, y, r) {
 // STAGE DEFINITIONS
 // ============================================================
 const ITEM_POSITIONS = [
-  {x:180, y:265}, {x:480, y:248}, {x:330, y:428}
+  {x:128, y:252}, {x:570, y:238}, {x:352, y:430}
 ];
 const SHADOW_POSITIONS = [
   {x:278, y:305}, {x:490, y:260}, {x:388, y:408}
@@ -620,7 +620,7 @@ class CutItem {
     const n=((a+Math.PI)/(Math.PI*2)*this.SEG)|0;
     for(let d=-2;d<=2;d++) this.covered[(n+d+this.SEG)%this.SEG]=true;
     this.phase='tracing';
-    if(this.pct>=.55) this.startPop();
+    if(this.pct>=.90) this.startPop();
   }
   startPop(){ this.phase='popping'; this.popTimer=0; spawnParticles(this.x,this.y,this.color); }
   update(){
@@ -663,15 +663,20 @@ class CutItem {
       ctx.beginPath(); ctx.arc(this.x,this.y+this.guideR+22,17,0,Math.PI*2);
       ctx.fillStyle='rgba(0,0,0,.38)'; ctx.fill();
       ctx.font='bold 15px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle=pct>=.55?'#76FF03':'#FFD740';
-      ctx.fillText(Math.round(pct*100)+'%',this.x,this.y+this.guideR+22);
+      ctx.fillStyle = pct>=.90 ? '#76FF03' : pct>=.65 ? '#FFD740' : '#FFF';
+      ctx.fillText(
+        pct>=.90 ? '✓' : pct>=.65 ? 'もうすこし！' : Math.round(pct*100)+'%',
+        this.x, this.y+this.guideR+22
+      );
       ctx.restore();
     }
     ctx.save();
     ctx.font='bold 17px "Hiragino Maru Gothic ProN",sans-serif';
     ctx.textAlign='center'; ctx.fillStyle='#FFF';
     ctx.shadowColor='rgba(0,0,0,.6)'; ctx.shadowBlur=5;
-    ctx.fillText(this.phase==='idle'?'✏️ なぞってね':this.name, this.x, this.y-this.guideR-14);
+    const label = this.phase==='idle' ? '✏️ なぞってね'
+                : pct>=.65 ? 'もうすこし！' : this.name;
+    ctx.fillText(label, this.x, this.y-this.guideR-14);
     ctx.restore();
   }
 }
