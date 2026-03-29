@@ -147,6 +147,80 @@
     color: #9a8cb5;
   }
 
+  /* 履歴画像セクション */
+  .history-section {
+    width: 320px;
+    max-width: 85vw;
+  }
+
+  .history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .history-header span {
+    font-size: 0.9rem;
+    color: #6b5b8a;
+    font-weight: bold;
+  }
+
+  .history-clear-btn {
+    font-size: 0.7rem;
+    color: #9a8cb5;
+    background: none;
+    border: 1px solid rgba(180,160,210,0.4);
+    border-radius: 10px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+
+  .history-images {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 6px 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .history-thumb-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .history-thumb {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 2px solid rgba(180,160,210,0.5);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+
+  .history-thumb:hover {
+    transform: scale(1.08);
+  }
+
+  .history-del {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(200,60,60,0.8);
+    color: #fff;
+    font-size: 0.7rem;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
   .folder-images {
     display: flex;
     flex-wrap: wrap;
@@ -408,6 +482,15 @@
   <input type="file" class="file-input" id="fileInput" accept="image/*">
   <input type="file" class="file-input" id="cameraInput" accept="image/*" capture="environment">
 
+  <!-- 履歴画像 -->
+  <div class="history-section" id="historySection" style="display:none;">
+    <div class="history-header">
+      <span>まえにあそんだ絵</span>
+      <button class="history-clear-btn" id="historyClearBtn">ぜんぶけす</button>
+    </div>
+    <div class="history-images" id="historyImages"></div>
+  </div>
+
   <div class="drop-zone" id="dropZone">
     📁 ここに画像をドラッグ＆ドロップもできるよ
   </div>
@@ -452,6 +535,87 @@ const TAB_RATIO = 0.2;
 const PIECE_TRAY_SCALE = 0.55; // tray内でのピース縮小率
 
 let currentImageSrc = null;
+const HISTORY_KEY = 'puzzle_history';
+const HISTORY_MAX = 12; // 最大保存数
+const THUMB_SIZE = 200;  // サムネイル保存サイズ
+
+// ===== 履歴管理 =====
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveToHistory(dataUrl) {
+  // サムネイルを作って保存（容量節約）
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    const scale = Math.min(THUMB_SIZE / img.width, THUMB_SIZE / img.height, 1);
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const thumb = canvas.toDataURL('image/jpeg', 0.7);
+
+    const history = getHistory();
+    // 同じ画像がないか確認（先頭100文字で比較）
+    const key = thumb.substring(0, 100);
+    if (history.some(h => h.thumb.substring(0, 100) === key)) return;
+
+    history.unshift({ thumb, full: dataUrl.length < 2000000 ? dataUrl : thumb });
+    if (history.length > HISTORY_MAX) history.pop();
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {}
+    renderHistory();
+  };
+  img.src = dataUrl;
+}
+
+function renderHistory() {
+  const section = document.getElementById('historySection');
+  const container = document.getElementById('historyImages');
+  const history = getHistory();
+
+  if (history.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  container.innerHTML = '';
+
+  history.forEach((item, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'history-thumb-wrap';
+
+    const img = document.createElement('img');
+    img.className = 'history-thumb';
+    img.src = item.thumb;
+    img.addEventListener('click', () => startPuzzle(item.full || item.thumb));
+
+    const del = document.createElement('button');
+    del.className = 'history-del';
+    del.textContent = '✕';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const h = getHistory();
+      h.splice(i, 1);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch {}
+      renderHistory();
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(del);
+    container.appendChild(wrap);
+  });
+}
+
+// 全履歴クリア
+document.getElementById('historyClearBtn').addEventListener('click', () => {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+});
+
+// 起動時に履歴表示
+renderHistory();
 
 // ===== 画面サイズからボードサイズを計算 =====
 function calcBoardSize(imgAspect) {
@@ -665,6 +829,7 @@ function startPuzzle(src) {
     const gw = document.getElementById('gameWrapper');
     gw.style.display = 'flex';
     document.getElementById('msg').textContent = 'ピースをドラッグして、ただしいばしょにおいてね！';
+    saveToHistory(src);
     buildPuzzle(img);
   };
   img.onerror = () => {
