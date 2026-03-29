@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>パズルであそぼう！</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#764ba2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="パズル">
+<link rel="apple-touch-icon" href="icons/icon-192.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    font-family: 'Segoe UI', 'Yu Gothic', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+    touch-action: none;
+  }
+
+  /* === ヘッダー === */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 6px 16px;
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    font-size: 1.3rem;
+    color: #4a3f6b;
+    text-shadow: 1px 1px 3px rgba(255,255,255,0.6);
+  }
+
+  .message {
+    font-size: 0.85rem;
+    color: #6b5b8a;
+    text-align: center;
+    padding: 0 10px 4px;
+    flex-shrink: 0;
+  }
+
+  /* === 画像選択画面 === */
+  .start-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    overflow-y: auto;
+    flex: 1;
+    padding-bottom: 20px;
+  }
+
+  /* 選択ボタン群 */
+  .pick-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 320px;
+    max-width: 85vw;
+  }
+
+  .pick-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px 20px;
+    border: none;
+    border-radius: 18px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+  }
+
+  .pick-btn:hover, .pick-btn:active {
+    transform: scale(1.03);
+  }
+
+  .pick-btn .pick-icon { font-size: 1.6rem; }
+
+  .pick-btn-photo {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+  }
+
+  .pick-btn-camera {
+    background: linear-gradient(135deg, #43e97b, #38f9d7);
+    color: #1a5c3a;
+  }
+
+  .pick-btn-file {
+    background: rgba(255,255,255,0.6);
+    color: #4a3f6b;
+    border: 2px solid rgba(180,160,210,0.5);
+  }
+
+  .file-input { display: none; }
+
+  /* PC向けドロップゾーン */
+  .drop-zone {
+    width: 320px;
+    max-width: 85vw;
+    height: 100px;
+    border: 3px dashed #b8a9d4;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.35);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    font-size: 0.85rem;
+    color: #9a8cb5;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    background: rgba(255,255,255,0.7);
+    border-color: #8b7bbf;
+  }
+
+  /* PCではドロップゾーンを表示 */
+  @media (hover: hover) and (pointer: fine) {
+    .drop-zone { display: flex; }
+  }
+
+  .or-text {
+    font-size: 0.85rem;
+    color: #9a8cb5;
+  }
+
+  .folder-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    max-width: 400px;
+    padding: 10px;
+  }
+
+  .folder-images img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 10px;
+    border: 3px solid rgba(180,160,210,0.5);
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+
+  .folder-images img:hover {
+    transform: scale(1.1);
+    border-color: #7b6baf;
+  }
+
+  /* === ゲーム画面 === */
+  .game-wrapper {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+  }
+
+  /* ボード */
+  .board-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 4px;
+  }
+
+  .board-container {
+    position: relative;
+  }
+
+  .board-canvas {
+    border-radius: 12px;
+    display: block;
+  }
+
+  .board-slots {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .board-slots .slot {
+    position: absolute;
+  }
+
+  /* ピース置き場 */
+  .tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    align-content: flex-start;
+    width: 95%;
+    max-width: 600px;
+    padding: 8px;
+    background: rgba(255,255,255,0.4);
+    border-radius: 14px;
+    border: 2px solid rgba(180,160,210,0.4);
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 6px;
+  }
+
+  .tray-label {
+    width: 100%;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #7a6b9a;
+    margin-bottom: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ピース（tray内では縮小表示） */
+  .piece {
+    cursor: grab;
+    filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+    transition: filter 0.1s;
+    z-index: 10;
+  }
+
+  .piece.in-tray {
+    transform-origin: top left;
+  }
+
+  .piece.dragging {
+    opacity: 0.88;
+    z-index: 1000;
+    cursor: grabbing;
+    filter: drop-shadow(5px 5px 10px rgba(0,0,0,0.45));
+  }
+
+  .piece.placed-correct {
+    cursor: default;
+    filter: none;
+    pointer-events: none;
+  }
+
+  .piece.placed-wrong {
+    cursor: grab;
+    filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.2));
+  }
+
+  /* ちがうかも？ ふきだし */
+  .wrong-alert {
+    position: fixed;
+    z-index: 8000;
+    pointer-events: none;
+    animation: alertPop 2s ease forwards;
+  }
+
+  .wrong-alert-inner {
+    background: #fff3cd;
+    border: 2px solid #f0c040;
+    border-radius: 14px;
+    padding: 8px 16px;
+    font-size: 1rem;
+    color: #856404;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+  }
+
+  @keyframes alertPop {
+    0%   { opacity: 0; transform: translateY(10px) scale(0.8); }
+    15%  { opacity: 1; transform: translateY(-10px) scale(1); }
+    70%  { opacity: 1; transform: translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+  }
+
+  /* ボタン */
+  .btn {
+    padding: 12px 30px;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 30px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+    transition: transform 0.15s;
+  }
+
+  .btn:hover { transform: scale(1.07); }
+
+  .btn-back {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    border: none;
+    border-radius: 14px;
+    background: rgba(180,160,210,0.5);
+    color: #4a3f6b;
+    cursor: pointer;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .btn-back:hover { background: rgba(180,160,210,0.8); }
+
+  .complete-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .complete-overlay.show { display: flex; }
+
+  .complete-box {
+    background: linear-gradient(135deg, #fff7ad, #ffa9f9);
+    border-radius: 24px;
+    padding: 40px 50px;
+    text-align: center;
+    animation: popIn 0.5s ease;
+  }
+
+  .complete-box h2 {
+    font-size: 2.4rem;
+    color: #6b3fa0;
+    margin-bottom: 8px;
+  }
+
+  .complete-box p {
+    font-size: 1.1rem;
+    color: #7a5ba0;
+    margin-bottom: 20px;
+  }
+
+  .complete-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  @keyframes popIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  .stars {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10000;
+    display: none;
+  }
+
+  .star {
+    position: absolute;
+    font-size: 2rem;
+    animation: starFall 1.5s ease-out forwards;
+  }
+
+  @keyframes starFall {
+    0% { opacity: 1; transform: translateY(0) rotate(0deg) scale(1); }
+    100% { opacity: 0; transform: translateY(300px) rotate(720deg) scale(0.3); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>パズルであそぼう！</h1>
+</div>
+<p class="message" id="msg">パズルにしたい絵をえらんでね！</p>
+
+<!-- === 画像選択画面 === -->
+<div class="start-screen" id="startScreen">
+  <div class="pick-buttons">
+    <button class="pick-btn pick-btn-photo" id="pickPhotoBtn">
+      <span class="pick-icon">🖼️</span>写真からえらぶ
+    </button>
+    <button class="pick-btn pick-btn-camera" id="pickCameraBtn">
+      <span class="pick-icon">📷</span>カメラでとる
+    </button>
+  </div>
+
+  <input type="file" class="file-input" id="fileInput" accept="image/*">
+  <input type="file" class="file-input" id="cameraInput" accept="image/*" capture="environment">
+
+  <div class="drop-zone" id="dropZone">
+    📁 ここに画像をドラッグ＆ドロップもできるよ
+  </div>
+
+  <div class="or-text" id="folderLabel" style="display:none;">── フォルダの画像 ──</div>
+  <div class="folder-images" id="folderImages"></div>
+</div>
+
+<!-- === ゲーム画面 === -->
+<div class="game-wrapper" id="gameWrapper">
+  <div class="board-area" id="boardArea">
+    <div class="board-container" id="boardContainer">
+      <canvas class="board-canvas" id="boardCanvas"></canvas>
+      <div class="board-slots" id="boardSlots"></div>
+    </div>
+  </div>
+  <div class="tray" id="tray">
+    <div class="tray-label">ピースをここからドラッグしてね</div>
+  </div>
+  <button class="btn-back" id="backBtn">← べつの絵をえらぶ</button>
+</div>
+
+<!-- 完成 -->
+<div class="complete-overlay" id="overlay">
+  <div class="complete-box">
+    <h2>かんせい！</h2>
+    <p>すごい！よくできたね！</p>
+    <div class="complete-buttons">
+      <button class="btn" onclick="restartSameImage()">もういちど</button>
+      <button class="btn" onclick="backToSelect()">べつの絵</button>
+    </div>
+  </div>
+</div>
+
+<div class="stars" id="stars"></div>
+
+<script>
+const COLS = 5;
+const ROWS = 2;
+const TOTAL = COLS * ROWS;
+const TAB_RATIO = 0.2;
+const PIECE_TRAY_SCALE = 0.55; // tray内でのピース縮小率
+
+let currentImageSrc = null;
+
+// ===== 画面サイズからボードサイズを計算 =====
+function calcBoardSize(imgAspect) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const headerH = 60;  // ヘッダー+メッセージ
+  const trayMinH = vh * 0.28; // trayの最低高さ
+  const backBtnH = 36;
+  const padding = 20;
+
+  const availW = vw * 0.92;
+  const availH = vh - headerH - trayMinH - backBtnH - padding;
+
+  let bw, bh;
+  if (imgAspect > availW / availH) {
+    bw = availW;
+    bh = availW / imgAspect;
+  } else {
+    bh = availH;
+    bw = availH * imgAspect;
+  }
+
+  // タブの余白を含めた最終サイズにフィットさせる
+  const tabPadRatio = 1 + TAB_RATIO * 2 / Math.min(COLS, ROWS);
+  bw = Math.min(bw, availW / (1 + TAB_RATIO * 2 / COLS));
+  bh = Math.min(bh, availH / (1 + TAB_RATIO * 2 / ROWS));
+
+  // アスペクト比を再適用
+  if (bw / bh > imgAspect) {
+    bw = bh * imgAspect;
+  } else {
+    bh = bw / imgAspect;
+  }
+
+  return { bw: Math.round(bw), bh: Math.round(bh) };
+}
+
+// ===== エッジ情報を生成 =====
+function generateEdges(rows, cols) {
+  const edges = [];
+  for (let r = 0; r < rows; r++) {
+    edges[r] = [];
+    for (let c = 0; c < cols; c++) {
+      edges[r][c] = {
+        top:    r === 0 ? 0 : -edges[r - 1][c].bottom,
+        left:   c === 0 ? 0 : -edges[r][c - 1].right,
+        bottom: r === rows - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
+        right:  c === cols - 1 ? 0 : (Math.random() > 0.5 ? 1 : -1),
+      };
+    }
+  }
+  return edges;
+}
+
+// ===== ジグソー型パスを描画 =====
+function jigsawPath(ctx, x, y, w, h, edge) {
+  const tabW = w * TAB_RATIO;
+  const tabH = h * TAB_RATIO;
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+
+  if (edge.top === 0) {
+    ctx.lineTo(x + w, y);
+  } else {
+    const dir = edge.top;
+    const mid = x + w / 2;
+    ctx.lineTo(mid - tabW * 0.7, y);
+    ctx.bezierCurveTo(mid - tabW * 0.7, y - dir * tabH * 0.1, mid - tabW * 1.0, y - dir * tabH * 0.8, mid, y - dir * tabH * 1.0);
+    ctx.bezierCurveTo(mid + tabW * 1.0, y - dir * tabH * 0.8, mid + tabW * 0.7, y - dir * tabH * 0.1, mid + tabW * 0.7, y);
+    ctx.lineTo(x + w, y);
+  }
+
+  if (edge.right === 0) {
+    ctx.lineTo(x + w, y + h);
+  } else {
+    const dir = edge.right;
+    const mid = y + h / 2;
+    ctx.lineTo(x + w, mid - tabH * 0.7);
+    ctx.bezierCurveTo(x + w + dir * tabW * 0.1, mid - tabH * 0.7, x + w + dir * tabW * 0.8, mid - tabH * 1.0, x + w + dir * tabW * 1.0, mid);
+    ctx.bezierCurveTo(x + w + dir * tabW * 0.8, mid + tabH * 1.0, x + w + dir * tabW * 0.1, mid + tabH * 0.7, x + w, mid + tabH * 0.7);
+    ctx.lineTo(x + w, y + h);
+  }
+
+  if (edge.bottom === 0) {
+    ctx.lineTo(x, y + h);
+  } else {
+    const dir = edge.bottom;
+    const mid = x + w / 2;
+    ctx.lineTo(mid + tabW * 0.7, y + h);
+    ctx.bezierCurveTo(mid + tabW * 0.7, y + h + dir * tabH * 0.1, mid + tabW * 1.0, y + h + dir * tabH * 0.8, mid, y + h + dir * tabH * 1.0);
+    ctx.bezierCurveTo(mid - tabW * 1.0, y + h + dir * tabH * 0.8, mid - tabW * 0.7, y + h + dir * tabH * 0.1, mid - tabW * 0.7, y + h);
+    ctx.lineTo(x, y + h);
+  }
+
+  if (edge.left === 0) {
+    ctx.lineTo(x, y);
+  } else {
+    const dir = edge.left;
+    const mid = y + h / 2;
+    ctx.lineTo(x, mid + tabH * 0.7);
+    ctx.bezierCurveTo(x - dir * tabW * 0.1, mid + tabH * 0.7, x - dir * tabW * 0.8, mid + tabH * 1.0, x - dir * tabW * 1.0, mid);
+    ctx.bezierCurveTo(x - dir * tabW * 0.8, mid - tabH * 1.0, x - dir * tabW * 0.1, mid - tabH * 0.7, x, mid - tabH * 0.7);
+    ctx.lineTo(x, y);
+  }
+
+  ctx.closePath();
+}
+
+// ===== ボード描画 =====
+function drawBoard(canvas, pw, ph, edges, tabExtraW, tabExtraH) {
+  canvas.width = pw * COLS + tabExtraW * 2;
+  canvas.height = ph * ROWS + tabExtraH * 2;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, canvas.width, canvas.height, 12);
+  ctx.fill();
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * pw + tabExtraW;
+      const y = r * ph + tabExtraH;
+      jigsawPath(ctx, x, y, pw, ph, edges[r][c]);
+      ctx.fillStyle = 'rgba(200, 185, 230, 0.15)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(150, 130, 190, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+}
+
+// ===== 「ちがうかも？」アラート =====
+function showWrongAlert(x, y) {
+  const el = document.createElement('div');
+  el.className = 'wrong-alert';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.innerHTML = '<div class="wrong-alert-inner">ちがうかも？</div>';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2100);
+}
+
+// --- フォルダ内の画像を自動検出 ---
+const folderFiles = [
+  'puzzle.png', 'puzzle.jpg', 'puzzle.jpeg', 'puzzle.gif', 'puzzle.webp',
+  'image.png', 'image.jpg', 'image.jpeg',
+  '1.png', '1.jpg', '2.png', '2.jpg', '3.png', '3.jpg',
+  '4.png', '4.jpg', '5.png', '5.jpg',
+  'photo.png', 'photo.jpg', 'picture.png', 'picture.jpg'
+];
+
+const folderImagesEl = document.getElementById('folderImages');
+const folderLabel = document.getElementById('folderLabel');
+folderFiles.forEach(fname => {
+  const testImg = new Image();
+  testImg.onload = () => {
+    folderLabel.style.display = '';
+    const thumb = document.createElement('img');
+    thumb.src = fname;
+    thumb.alt = fname;
+    thumb.title = fname;
+    thumb.addEventListener('click', () => startPuzzle(fname));
+    folderImagesEl.appendChild(thumb);
+  };
+  testImg.src = fname;
+});
+
+// --- ファイル選択 ---
+const dropZoneEl = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const cameraInput = document.getElementById('cameraInput');
+const pickPhotoBtn = document.getElementById('pickPhotoBtn');
+const pickCameraBtn = document.getElementById('pickCameraBtn');
+
+// 写真からえらぶボタン
+pickPhotoBtn.addEventListener('click', () => fileInput.click());
+
+// カメラでとるボタン
+pickCameraBtn.addEventListener('click', () => cameraInput.click());
+
+// ファイル入力の変更イベント
+fileInput.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) loadFileAsImage(file); });
+cameraInput.addEventListener('change', (e) => { const file = e.target.files[0]; if (file) loadFileAsImage(file); });
+
+// PC向けドラッグ＆ドロップ
+dropZoneEl.addEventListener('click', () => fileInput.click());
+dropZoneEl.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneEl.classList.add('dragover'); });
+dropZoneEl.addEventListener('dragleave', () => dropZoneEl.classList.remove('dragover'));
+dropZoneEl.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZoneEl.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadFileAsImage(file);
+});
+
+function loadFileAsImage(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => startPuzzle(e.target.result);
+  reader.readAsDataURL(file);
+}
+
+// --- パズル開始 ---
+function startPuzzle(src) {
+  currentImageSrc = src;
+  const img = new Image();
+  img.onload = () => {
+    document.getElementById('startScreen').style.display = 'none';
+    const gw = document.getElementById('gameWrapper');
+    gw.style.display = 'flex';
+    document.getElementById('msg').textContent = 'ピースをドラッグして、ただしいばしょにおいてね！';
+    buildPuzzle(img);
+  };
+  img.onerror = () => {
+    document.getElementById('msg').textContent = '画像をよみこめませんでした…';
+  };
+  img.src = src;
+}
+
+function buildPuzzle(img) {
+  const boardCanvas = document.getElementById('boardCanvas');
+  const boardSlots = document.getElementById('boardSlots');
+  const boardContainer = document.getElementById('boardContainer');
+  const tray = document.getElementById('tray');
+  boardSlots.innerHTML = '';
+  tray.innerHTML = '<div class="tray-label">ピースをここからドラッグしてね</div>';
+  document.querySelectorAll('body > .piece').forEach(p => p.remove());
+
+  const aspect = img.naturalWidth / img.naturalHeight;
+  const { bw, bh } = calcBoardSize(aspect);
+
+  const pw = Math.round(bw / COLS);
+  const ph = Math.round(bh / ROWS);
+  const tabExtraW = Math.round(pw * TAB_RATIO);
+  const tabExtraH = Math.round(ph * TAB_RATIO);
+
+  const edges = generateEdges(ROWS, COLS);
+
+  drawBoard(boardCanvas, pw, ph, edges, tabExtraW, tabExtraH);
+  boardContainer.style.width = boardCanvas.width + 'px';
+  boardContainer.style.height = boardCanvas.height + 'px';
+  boardSlots.style.width = boardCanvas.width + 'px';
+  boardSlots.style.height = boardCanvas.height + 'px';
+
+  const slots = [];
+  const slotOccupant = new Array(TOTAL).fill(null);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const idx = r * COLS + c;
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.dataset.idx = idx;
+      slot.style.left = (c * pw + tabExtraW) + 'px';
+      slot.style.top = (r * ph + tabExtraH) + 'px';
+      slot.style.width = pw + 'px';
+      slot.style.height = ph + 'px';
+      boardSlots.appendChild(slot);
+      slots.push(slot);
+    }
+  }
+
+  // ピース生成
+  const indices = Array.from({ length: TOTAL }, (_, i) => i);
+  shuffle(indices);
+
+  const scale = PIECE_TRAY_SCALE;
+
+  indices.forEach((idx) => {
+    const r = Math.floor(idx / COLS);
+    const c = idx % COLS;
+    const edge = edges[r][c];
+
+    const canvasW = pw + tabExtraW * 2;
+    const canvasH = ph + tabExtraH * 2;
+
+    const piece = document.createElement('canvas');
+    piece.width = canvasW;
+    piece.height = canvasH;
+    piece.className = 'piece in-tray';
+    piece.dataset.idx = idx;
+    piece.dataset.slotIdx = '-1';
+
+    // tray内の見た目サイズを設定
+    piece.style.width = canvasW * scale + 'px';
+    piece.style.height = canvasH * scale + 'px';
+
+    const ctx = piece.getContext('2d');
+
+    jigsawPath(ctx, tabExtraW, tabExtraH, pw, ph, edge);
+    ctx.save();
+    ctx.clip();
+
+    const sx = (c / COLS) * img.naturalWidth - (tabExtraW / pw) * (img.naturalWidth / COLS);
+    const sy = (r / ROWS) * img.naturalHeight - (tabExtraH / ph) * (img.naturalHeight / ROWS);
+    const sw = (img.naturalWidth / COLS) * (canvasW / pw);
+    const sh = (img.naturalHeight / ROWS) * (canvasH / ph);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+    ctx.restore();
+
+    jigsawPath(ctx, tabExtraW, tabExtraH, pw, ph, edge);
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // --- ドラッグ処理 ---
+    let offsetX, offsetY;
+    let isDragging = false;
+
+    function onStart(e) {
+      if (piece.classList.contains('placed-correct')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const pt = e.touches ? e.touches[0] : e;
+      const rect = piece.getBoundingClientRect();
+
+      // ボードに置かれていた場合、スロットを解放
+      const prevSlot = parseInt(piece.dataset.slotIdx);
+      if (prevSlot >= 0) {
+        slotOccupant[prevSlot] = null;
+        piece.dataset.slotIdx = '-1';
+        piece.classList.remove('placed-wrong');
+      }
+
+      // フルサイズに戻してbodyに移動
+      piece.classList.remove('in-tray');
+      piece.style.width = canvasW + 'px';
+      piece.style.height = canvasH + 'px';
+
+      // ドラッグ中はピースの中心をタッチ位置に
+      const fullW = canvasW;
+      const fullH = canvasH;
+      offsetX = fullW / 2;
+      offsetY = fullH / 2;
+
+      piece.style.position = 'absolute';
+      piece.style.left = pt.clientX - offsetX + window.scrollX + 'px';
+      piece.style.top = pt.clientY - offsetY + window.scrollY + 'px';
+      document.body.appendChild(piece);
+      isDragging = true;
+      piece.classList.add('dragging');
+    }
+
+    function onMove(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      const pt = e.touches ? e.touches[0] : e;
+      piece.style.left = pt.clientX - offsetX + window.scrollX + 'px';
+      piece.style.top = pt.clientY - offsetY + window.scrollY + 'px';
+    }
+
+    function onEnd(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      piece.classList.remove('dragging');
+      const pt = e.changedTouches ? e.changedTouches[0] : e;
+      const target = getClosestSlot(pt.clientX, pt.clientY, slots, slotOccupant);
+
+      if (target) {
+        const slotIdx = parseInt(target.dataset.idx);
+        const boardRect = boardContainer.getBoundingClientRect();
+        const slotLeft = parseInt(target.style.left);
+        const slotTop = parseInt(target.style.top);
+
+        piece.style.left = boardRect.left + window.scrollX + slotLeft - tabExtraW + 'px';
+        piece.style.top = boardRect.top + window.scrollY + slotTop - tabExtraH + 'px';
+        slotOccupant[slotIdx] = piece;
+        piece.dataset.slotIdx = slotIdx;
+
+        if (slotIdx === idx) {
+          piece.classList.add('placed-correct');
+          checkComplete(slotOccupant);
+        } else {
+          piece.classList.add('placed-wrong');
+          const pieceRect = piece.getBoundingClientRect();
+          showWrongAlert(
+            pieceRect.left + pieceRect.width / 2 - 55,
+            pieceRect.top - 35
+          );
+        }
+      } else {
+        // trayに戻す（縮小サイズに）
+        piece.style.position = '';
+        piece.style.left = '';
+        piece.style.top = '';
+        piece.style.width = canvasW * scale + 'px';
+        piece.style.height = canvasH * scale + 'px';
+        piece.classList.add('in-tray');
+        piece.dataset.slotIdx = '-1';
+        tray.appendChild(piece);
+      }
+    }
+
+    piece.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    piece.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+
+    tray.appendChild(piece);
+  });
+
+  function getClosestSlot(cx, cy, slots, slotOccupant) {
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < slots.length; i++) {
+      if (slotOccupant[i] && slotOccupant[i].classList.contains('placed-correct')) continue;
+      const r = slots[i].getBoundingClientRect();
+      const centerX = r.left + r.width / 2;
+      const centerY = r.top + r.height / 2;
+      const dist = Math.sqrt((cx - centerX) ** 2 + (cy - centerY) ** 2);
+      const threshold = Math.max(r.width, r.height) * 0.65;
+      if (dist < threshold && dist < bestDist) {
+        bestDist = dist;
+        best = slots[i];
+      }
+    }
+    if (!best) return null;
+
+    const bestIdx = parseInt(best.dataset.idx);
+    if (slotOccupant[bestIdx]) {
+      const displaced = slotOccupant[bestIdx];
+      displaced.style.position = '';
+      displaced.style.left = '';
+      displaced.style.top = '';
+      displaced.style.width = (pw + tabExtraW * 2) * scale + 'px';
+      displaced.style.height = (ph + tabExtraH * 2) * scale + 'px';
+      displaced.classList.add('in-tray');
+      displaced.dataset.slotIdx = '-1';
+      displaced.classList.remove('placed-wrong');
+      tray.appendChild(displaced);
+      slotOccupant[bestIdx] = null;
+    }
+
+    return best;
+  }
+
+  function checkComplete(slotOccupant) {
+    for (let i = 0; i < TOTAL; i++) {
+      if (!slotOccupant[i] || !slotOccupant[i].classList.contains('placed-correct')) return;
+    }
+    setTimeout(onComplete, 500);
+  }
+}
+
+function onComplete() {
+  const starsEl = document.getElementById('stars');
+  starsEl.innerHTML = '';
+  starsEl.style.display = 'block';
+  const emojis = ['⭐', '🌟', '✨', '💫', '🎉', '🎊'];
+  for (let i = 0; i < 30; i++) {
+    const s = document.createElement('span');
+    s.className = 'star';
+    s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 40 + '%';
+    s.style.animationDelay = Math.random() * 0.8 + 's';
+    starsEl.appendChild(s);
+  }
+  setTimeout(() => document.getElementById('overlay').classList.add('show'), 600);
+}
+
+document.getElementById('backBtn').addEventListener('click', backToSelect);
+
+function backToSelect() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('stars').style.display = 'none';
+  document.getElementById('gameWrapper').style.display = 'none';
+  document.getElementById('startScreen').style.display = 'flex';
+  document.getElementById('msg').textContent = 'パズルにしたい絵をえらんでね！';
+  document.querySelectorAll('body > .piece').forEach(p => p.remove());
+  document.querySelectorAll('.wrong-alert').forEach(a => a.remove());
+  document.getElementById('boardSlots').innerHTML = '';
+  document.getElementById('tray').innerHTML = '';
+  fileInput.value = '';
+  cameraInput.value = '';
+}
+
+function restartSameImage() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('stars').style.display = 'none';
+  document.querySelectorAll('body > .piece').forEach(p => p.remove());
+  document.querySelectorAll('.wrong-alert').forEach(a => a.remove());
+  if (currentImageSrc) startPuzzle(currentImageSrc);
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// --- Service Worker登録 ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
